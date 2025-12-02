@@ -63,6 +63,59 @@ export default function ChatDetails({ data }: ChatDetailsProps) {
     return filteredChats.find((c) => c.chat_id === selectedChat[0]);
   }, [filteredChats, selectedChat]);
 
+  // Check if this is a personal chat (only 2 senders)
+  const isPersonalChat = useMemo(() => {
+    if (!chat) return false;
+    return Object.keys(chat.senders).length === 2;
+  }, [chat]);
+
+  // Identify user sender (from_id starts with "user")
+  const userSender = useMemo(() => {
+    if (!chat) return null;
+    for (const [name, data] of Object.entries(chat.senders)) {
+      if (data.from_id && data.from_id.startsWith("user")) {
+        return { name, data };
+      }
+    }
+    return null;
+  }, [chat]);
+
+  // Personal chat comparison data
+  const personalChatComparison = useMemo(() => {
+    if (!chat || !isPersonalChat || !userSender) return null;
+
+    const otherSender = Object.entries(chat.senders).find(
+      ([name]) => name !== userSender.name
+    );
+
+    if (!otherSender) return null;
+
+    const [otherName, otherData] = otherSender;
+
+    // Calculate total length (avg * messages) and round to whole number
+    const userTotalLength = Math.round(
+      (userSender.data.avg_message_length || 0) * userSender.data.message_count
+    );
+    const otherTotalLength = Math.round(
+      (otherData.avg_message_length || 0) * otherData.message_count
+    );
+
+    return {
+      user: {
+        name: userSender.name,
+        messages: userSender.data.message_count,
+        avgLength: userSender.data.avg_message_length || 0,
+        totalLength: userTotalLength,
+      },
+      other: {
+        name: otherName,
+        messages: otherData.message_count,
+        avgLength: otherData.avg_message_length || 0,
+        totalLength: otherTotalLength,
+      },
+    };
+  }, [chat, isPersonalChat, userSender]);
+
   // Sender breakdown
   const senderBreakdown = useMemo(() => {
     if (!chat) return [];
@@ -331,29 +384,16 @@ export default function ChatDetails({ data }: ChatDetailsProps) {
       {chat && (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in stagger-2 opacity-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in stagger-2 opacity-0">
             <StatCard
               title="Total Messages"
               value={chat.total_messages}
               subtitle={chat.chat_type.replace(/_/g, " ")}
             />
             <StatCard
-              title="Your Messages"
-              value={chat.user_messages}
-              subtitle={`${(
-                (chat.user_messages / chat.total_messages) *
-                100
-              ).toFixed(1)}% of total`}
-            />
-            <StatCard
               title="Photos Shared"
               value={chat.photo_count}
               subtitle="in this chat"
-            />
-            <StatCard
-              title="Avg Message Length"
-              value={chat?.avg_message_length.toFixed(0) || "N/A"}
-              subtitle="characters"
             />
           </div>
 
@@ -441,107 +481,185 @@ export default function ChatDetails({ data }: ChatDetailsProps) {
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 gap-6">
-            {/* Sender Breakdown */}
-            <div className="bg-dark-900 border border-dark-700 rounded-xl p-6 animate-fade-in stagger-3 opacity-0">
-              <h2 className="text-lg font-display font-semibold text-dark-100 mb-6">
-                Messages by Sender
-              </h2>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={senderBreakdown} layout="vertical">
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#2a2a32"
-                      horizontal={false}
-                    />
-                    <XAxis
-                      type="number"
-                      stroke="#565869"
-                      tick={{ fill: "#acacbe", fontSize: 11 }}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      stroke="#565869"
-                      tick={{ fill: "#acacbe", fontSize: 10 }}
-                      width={100}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1e1e22",
-                        border: "1px solid #2a2a32",
-                        borderRadius: "8px",
-                      }}
-                      labelFormatter={(label, payload) =>
-                        payload[0]?.payload?.fullName || label
-                      }
-                    />
-                    <Bar
-                      dataKey="messages"
-                      fill="#3b82f6"
-                      radius={[0, 4, 4, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Average Message Length by Sender */}
-            {senderBreakdown.length > 0 && (
-              <div className="bg-dark-900 border border-dark-700 rounded-xl p-6 animate-fade-in stagger-4 opacity-0">
+            {/* Personal Chat Comparison - Two cards side by side */}
+            {isPersonalChat && personalChatComparison ? (
+              <div className="bg-dark-900 border border-dark-700 rounded-xl p-6 animate-fade-in stagger-3 opacity-0">
                 <h2 className="text-lg font-display font-semibold text-dark-100 mb-6">
-                  Average Message Length by Sender
+                  Comparison
                 </h2>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={senderBreakdown} layout="vertical">
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="#2a2a32"
-                        horizontal={false}
-                      />
-                      <XAxis
-                        type="number"
-                        stroke="#565869"
-                        tick={{ fill: "#acacbe", fontSize: 11 }}
-                        label={{
-                          value: "Characters",
-                          position: "insideBottom",
-                          offset: -5,
-                          fill: "#acacbe",
-                          fontSize: 12,
-                        }}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        stroke="#565869"
-                        tick={{ fill: "#acacbe", fontSize: 10 }}
-                        width={100}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#1e1e22",
-                          border: "1px solid #2a2a32",
-                          borderRadius: "8px",
-                        }}
-                        labelFormatter={(label, payload) =>
-                          payload[0]?.payload?.fullName || label
-                        }
-                        formatter={(value: number) => [
-                          `${value.toFixed(0)} chars`,
-                          "Avg Length",
-                        ]}
-                      />
-                      <Bar
-                        dataKey="avgLength"
-                        fill="#8b5cf6"
-                        radius={[0, 4, 4, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* User Card */}
+                  <div className="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                    <h3 className="text-lg font-display font-semibold text-dark-100 mb-6">
+                      {personalChatComparison.user.name}
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-dark-700">
+                        <span className="text-sm text-dark-400">Messages</span>
+                        <span className="text-xl font-display font-bold text-dark-100">
+                          {personalChatComparison.user.messages.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pb-3 border-b border-dark-700">
+                        <span className="text-sm text-dark-400">
+                          Avg Length
+                        </span>
+                        <span className="text-xl font-display font-bold text-dark-100">
+                          {personalChatComparison.user.avgLength.toFixed(0)}{" "}
+                          words
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-dark-400">
+                          Total Length
+                        </span>
+                        <span className="text-xl font-display font-bold text-dark-100">
+                          {personalChatComparison.user.totalLength.toLocaleString()}{" "}
+                          words
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Other Person Card */}
+                  <div className="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                    <h3 className="text-lg font-display font-semibold text-dark-100 mb-6">
+                      {personalChatComparison.other.name}
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-dark-700">
+                        <span className="text-sm text-dark-400">Messages</span>
+                        <span className="text-xl font-display font-bold text-dark-100">
+                          {personalChatComparison.other.messages.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pb-3 border-b border-dark-700">
+                        <span className="text-sm text-dark-400">
+                          Avg Length
+                        </span>
+                        <span className="text-xl font-display font-bold text-dark-100">
+                          {personalChatComparison.other.avgLength.toFixed(0)}{" "}
+                          words
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-dark-400">
+                          Total Length
+                        </span>
+                        <span className="text-xl font-display font-bold text-dark-100">
+                          {personalChatComparison.other.totalLength.toLocaleString()}{" "}
+                          words
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <>
+                {/* Sender Breakdown - Chart for group chats */}
+                <div className="bg-dark-900 border border-dark-700 rounded-xl p-6 animate-fade-in stagger-3 opacity-0">
+                  <h2 className="text-lg font-display font-semibold text-dark-100 mb-6">
+                    Messages by Sender
+                  </h2>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={senderBreakdown} layout="vertical">
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#2a2a32"
+                          horizontal={false}
+                        />
+                        <XAxis
+                          type="number"
+                          stroke="#565869"
+                          tick={{ fill: "#acacbe", fontSize: 11 }}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          stroke="#565869"
+                          tick={{ fill: "#acacbe", fontSize: 10 }}
+                          width={100}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#1e1e22",
+                            border: "1px solid #2a2a32",
+                            borderRadius: "8px",
+                          }}
+                          labelFormatter={(label, payload) =>
+                            payload[0]?.payload?.fullName || label
+                          }
+                        />
+                        <Bar
+                          dataKey="messages"
+                          fill="#3b82f6"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Average Message Length by Sender - Chart for group chats */}
+                {senderBreakdown.length > 0 && (
+                  <div className="bg-dark-900 border border-dark-700 rounded-xl p-6 animate-fade-in stagger-4 opacity-0">
+                    <h2 className="text-lg font-display font-semibold text-dark-100 mb-6">
+                      Average Message Length by Sender
+                    </h2>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={senderBreakdown} layout="vertical">
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#2a2a32"
+                            horizontal={false}
+                          />
+                          <XAxis
+                            type="number"
+                            stroke="#565869"
+                            tick={{ fill: "#acacbe", fontSize: 11 }}
+                            label={{
+                              value: "Words",
+                              position: "insideBottom",
+                              offset: -5,
+                              fill: "#acacbe",
+                              fontSize: 12,
+                            }}
+                          />
+                          <YAxis
+                            type="category"
+                            dataKey="name"
+                            stroke="#565869"
+                            tick={{ fill: "#acacbe", fontSize: 10 }}
+                            width={100}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#1e1e22",
+                              border: "1px solid #2a2a32",
+                              borderRadius: "8px",
+                            }}
+                            labelFormatter={(label, payload) =>
+                              payload[0]?.payload?.fullName || label
+                            }
+                            formatter={(value: number) => [
+                              `${value.toFixed(0)} words`,
+                              "Avg Length",
+                            ]}
+                          />
+                          <Bar
+                            dataKey="avgLength"
+                            fill="#8b5cf6"
+                            radius={[0, 4, 4, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Active Days Heatmap - GitHub Style */}

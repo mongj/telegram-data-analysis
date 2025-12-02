@@ -1,5 +1,11 @@
-import { createContext, useContext, useState, useMemo, type ReactNode } from 'react';
-import type { ChatSummary } from '../types';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import type { ChatSummary } from "../types";
 
 export interface FilterState {
   dateRange: {
@@ -20,6 +26,9 @@ interface FilterContextValue {
   allChatTypes: string[];
   chatSummary: ChatSummary[];
   setChatSummary: (chats: ChatSummary[]) => void;
+  // Global hover state for cross-chart highlighting
+  hoveredChatId: string | null;
+  setHoveredChatId: (id: string | null) => void;
 }
 
 const FilterContext = createContext<FilterContextValue | null>(null);
@@ -28,21 +37,22 @@ const FilterContext = createContext<FilterContextValue | null>(null);
 function getDefaultStartDate(): string {
   const date = new Date();
   date.setFullYear(date.getFullYear() - 1);
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
 }
 
 function getDefaultEndDate(): string {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toISOString().split("T")[0];
 }
 
 export function FilterProvider({ children }: { children: ReactNode }) {
   const [chatSummary, setChatSummary] = useState<ChatSummary[]>([]);
+  const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     dateRange: {
       start: getDefaultStartDate(),
       end: getDefaultEndDate(),
     },
-    chatTypes: ['personal_chat'],
+    chatTypes: ["personal_chat"],
     selectedChatIds: [],
   });
 
@@ -70,12 +80,16 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
   // Filter chats by type, then by selection
   const filteredChats = useMemo(() => {
-    let filtered = chatSummary.filter((c) =>
-      filters.chatTypes.length === 0 || filters.chatTypes.includes(c.chat_type)
+    let filtered = chatSummary.filter(
+      (c) =>
+        filters.chatTypes.length === 0 ||
+        filters.chatTypes.includes(c.chat_type)
     );
 
     if (filters.selectedChatIds.length > 0) {
-      filtered = filtered.filter((c) => filters.selectedChatIds.includes(c.chat_id));
+      filtered = filtered.filter((c) =>
+        filters.selectedChatIds.includes(c.chat_id)
+      );
     }
 
     return filtered;
@@ -90,6 +104,8 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     allChatTypes,
     chatSummary,
     setChatSummary,
+    hoveredChatId,
+    setHoveredChatId,
   };
 
   return (
@@ -100,8 +116,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 export function useFilters() {
   const context = useContext(FilterContext);
   if (!context) {
-    throw new Error('useFilters must be used within FilterProvider');
+    throw new Error("useFilters must be used within FilterProvider");
   }
   return context;
 }
-

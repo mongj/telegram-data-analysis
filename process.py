@@ -17,14 +17,14 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import ijson
 
 
-def get_text_length(text_field: Any) -> int:
-    """Extract text length from a message's text field.
+def get_word_count(text_field: Any) -> int:
+    """Extract word count from a message's text field.
 
     The text field can be:
     - A string
@@ -32,15 +32,22 @@ def get_text_length(text_field: Any) -> int:
     """
     if text_field is None:
         return 0
+    
+    def count_words_in_string(text: str) -> int:
+        """Count words in a string by splitting on whitespace."""
+        if not text or not text.strip():
+            return 0
+        return len(text.split())
+    
     if isinstance(text_field, str):
-        return len(text_field)
+        return count_words_in_string(text_field)
     if isinstance(text_field, list):
         total = 0
         for item in text_field:
             if isinstance(item, str):
-                total += len(item)
+                total += count_words_in_string(item)
             elif isinstance(item, dict) and "text" in item:
-                total += len(item["text"])
+                total += count_words_in_string(item["text"])
         return total
     return 0
 
@@ -51,6 +58,9 @@ def parse_date(date_str: str) -> dict:
         dt = datetime.fromisoformat(date_str)
         # Get ISO week (year, week number)
         year, week, _ = dt.isocalendar()
+        # Calculate Monday of the week (start of week)
+        monday = dt - timedelta(days=dt.weekday())
+        week_key = f"{monday.year:04d}-{monday.month:02d}-{monday.day:02d}"  # Date of Monday: YYYY-MM-DD
         return {
             "year": dt.year,
             "month": dt.month,
@@ -58,7 +68,7 @@ def parse_date(date_str: str) -> dict:
             "hour": dt.hour,
             "day_of_week": dt.weekday(),  # 0=Monday, 6=Sunday
             "week": week,
-            "week_key": f"{year:04d}-W{week:02d}",  # ISO week format: YYYY-Www
+            "week_key": week_key,
         }
     except (ValueError, TypeError):
         return {
@@ -266,10 +276,10 @@ def process_telegram_export(file_path: str, output_dir: str):
                 if has_photo:
                     summary["senders"][sender_key]["photo_count"] += 1
                 
-                # Track text length per sender
-                text_len = get_text_length(text)
-                if text_len > 0:
-                    summary["senders"][sender_key]["total_text_length"] += text_len
+                # Track word count per sender
+                word_count = get_word_count(text)
+                if word_count > 0:
+                    summary["senders"][sender_key]["total_text_length"] += word_count
                     summary["senders"][sender_key]["message_count_with_text"] += 1
 
                 # 3. Reactions data
@@ -354,10 +364,10 @@ def process_telegram_export(file_path: str, output_dir: str):
                 # 6. Additional insights (tracked in chat_summary)
                 summary = chat_summary[chat_id]
 
-                # Text length
-                text_len = get_text_length(text)
-                if text_len > 0:
-                    summary["total_text_length"] += text_len
+                # Word count
+                word_count = get_word_count(text)
+                if word_count > 0:
+                    summary["total_text_length"] += word_count
                     summary["message_count_for_avg"] += 1
 
                 # Reply and forward counts
@@ -394,7 +404,7 @@ def process_telegram_export(file_path: str, output_dir: str):
         summary["media_breakdown"] = dict(summary["media_breakdown"])
         senders_dict = {}
         for sender_name, sender_data in summary["senders"].items():
-            # Calculate average message length per sender
+            # Calculate average message length (in words) per sender
             avg_length = 0
             if sender_data["message_count_with_text"] > 0:
                 avg_length = round(
@@ -410,7 +420,7 @@ def process_telegram_export(file_path: str, output_dir: str):
             }
         summary["senders"] = senders_dict
 
-        # Calculate insights metrics
+        # Calculate insights metrics (avg_message_length is in words)
         if summary["message_count_for_avg"] > 0:
             summary["avg_message_length"] = round(
                 summary["total_text_length"] / summary["message_count_for_avg"], 2
@@ -671,6 +681,46 @@ def process_telegram_export(file_path: str, output_dir: str):
         },
     }
 
+    # Precompute all chats per time segment (by user messages only, sorted descending)
+    print("\nStep 3.5: Computing chats per time segment...")
+    top_chats_over_time = {
+        "by_day": {},
+        "by_week": {},
+        "by_month": {},
+        "by_year": {},
+    }
+
+    # Create a map of chat_id to chat_name for quick lookup
+    chat_id_to_name = {
+        str(chat_id): summary["chat_name"]
+        for chat_id, summary in chat_summary.items()
+    }
+
+    for granularity in ["day", "week", "month", "year"]:
+        source = time_series[f"by_{granularity}"]
+        output = top_chats_over_time[f"by_{granularity}"]
+
+        for date_key, chats_data in source.items():
+            # Get all chats with user message counts for this date
+            chats_with_counts = []
+            for chat_id_str, counts in chats_data.items():
+                user_count = counts.get("user", 0)
+                if user_count > 0:
+                    chats_with_counts.append({
+                        "chat_id": chat_id_str,
+                        "chat_name": chat_id_to_name.get(chat_id_str, "Unknown"),
+                        "user_messages": user_count,
+                    })
+
+            # Sort by user_messages descending (keep all chats, not just top 10)
+            chats_with_counts.sort(key=lambda x: x["user_messages"], reverse=True)
+
+            # Store as a dict for easy lookup: { chat_id: user_messages }
+            # Keep all chats, sorted by user_messages descending
+            output[date_key] = {
+                item["chat_id"]: item["user_messages"] for item in chats_with_counts
+            }
+
     # Write output files
     print("\nStep 4: Writing output files...")
 
@@ -706,12 +756,26 @@ def process_telegram_export(file_path: str, output_dir: str):
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(time_series_output, f, ensure_ascii=False)
 
+    # 6. Top chats over time (preprocessed)
+    output_path = os.path.join(output_dir, "top_chats_over_time.json")
+    print(f"  Writing {output_path}...")
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(top_chats_over_time, f, ensure_ascii=False)
+    total_segments = (
+        len(top_chats_over_time["by_day"])
+        + len(top_chats_over_time["by_week"])
+        + len(top_chats_over_time["by_month"])
+        + len(top_chats_over_time["by_year"])
+    )
+    print(f"    -> {total_segments} time segments processed (all chats included, sorted)")
+
     print("\nDone! Output files created:")
     print("  - messages_by_time.json")
     print("  - chat_summary.json")
     print("  - reactions_summary.json")
     print("  - time_patterns.json")
     print("  - time_series_aggregated.json")
+    print("  - top_chats_over_time.json")
 
 
 def main():

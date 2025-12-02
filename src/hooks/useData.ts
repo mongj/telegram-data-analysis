@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 import type {
   ChatSummary,
   ReactionsSummary,
+  TelegramData,
   TimePatterns,
   TimeSeriesAggregated,
-  TelegramData,
-} from '../types';
+  TopChatsOverTime,
+} from "../types";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
@@ -31,7 +32,10 @@ export function useData(): TelegramData {
       by_hour: {},
       by_day_of_week: {},
       total_by_hour: { user: Array(24).fill(0), others: Array(24).fill(0) },
-      total_by_day_of_week: { user: Array(7).fill(0), others: Array(7).fill(0) },
+      total_by_day_of_week: {
+        user: Array(7).fill(0),
+        others: Array(7).fill(0),
+      },
     },
     timeSeries: {
       by_day: {},
@@ -47,6 +51,12 @@ export function useData(): TelegramData {
       by_sender_month: {},
       by_sender_year: {},
     },
+    topChatsOverTime: {
+      by_day: {},
+      by_week: {},
+      by_month: {},
+      by_year: {},
+    },
     loading: true,
     error: null,
   });
@@ -54,19 +64,26 @@ export function useData(): TelegramData {
   useEffect(() => {
     async function loadData() {
       try {
-        const [chatSummary, reactions, timePatterns, timeSeries] =
-          await Promise.all([
-            fetchJson<ChatSummary[]>('/data/chat_summary.json'),
-            fetchJson<ReactionsSummary>('/data/reactions_summary.json'),
-            fetchJson<TimePatterns>('/data/time_patterns.json'),
-            fetchJson<TimeSeriesAggregated>('/data/time_series_aggregated.json'),
-          ]);
+        const [
+          chatSummary,
+          reactions,
+          timePatterns,
+          timeSeries,
+          topChatsOverTime,
+        ] = await Promise.all([
+          fetchJson<ChatSummary[]>("/data/chat_summary.json"),
+          fetchJson<ReactionsSummary>("/data/reactions_summary.json"),
+          fetchJson<TimePatterns>("/data/time_patterns.json"),
+          fetchJson<TimeSeriesAggregated>("/data/time_series_aggregated.json"),
+          fetchJson<TopChatsOverTime>("/data/top_chats_over_time.json"),
+        ]);
 
         setData({
           chatSummary,
           reactions,
           timePatterns,
           timeSeries,
+          topChatsOverTime,
           loading: false,
           error: null,
         });
@@ -74,7 +91,7 @@ export function useData(): TelegramData {
         setData((prev) => ({
           ...prev,
           loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load data',
+          error: err instanceof Error ? err.message : "Failed to load data",
         }));
       }
     }
@@ -93,9 +110,8 @@ export function useChatLookup(chatSummary: ChatSummary[]) {
   return {
     getChat: (id: number) => chatMap.get(id),
     getChatName: (id: number | string) => {
-      const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+      const numId = typeof id === "string" ? parseInt(id, 10) : id;
       return chatMap.get(numId)?.chat_name ?? `Chat ${id}`;
     },
   };
 }
-

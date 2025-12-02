@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Send,
+  Video,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
@@ -18,6 +19,7 @@ const navItems = [
   { path: "/chats", label: "Chat Details", icon: MessageSquare },
   { path: "/reactions", label: "Reactions", icon: Heart },
   { path: "/activity", label: "Activity Patterns", icon: Clock },
+  { path: "/media", label: "Tele Bubbles", icon: Video },
 ];
 
 export default function Layout({ children }: LayoutProps) {

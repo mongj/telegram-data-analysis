@@ -7,6 +7,7 @@ import Overview from './pages/Overview';
 import ChatDetails from './pages/ChatDetails';
 import Reactions from './pages/Reactions';
 import ActivityPatterns from './pages/ActivityPatterns';
+import VideoAudio from './pages/VideoAudio';
 
 function AppContent() {
   const data = useData();
@@ -55,6 +56,7 @@ function AppContent() {
         <Route path="/chats" element={<ChatDetails data={data} />} />
         <Route path="/reactions" element={<Reactions data={data} />} />
         <Route path="/activity" element={<ActivityPatterns data={data} />} />
+        <Route path="/media" element={<VideoAudio data={data} />} />
       </Routes>
     </Layout>
   );

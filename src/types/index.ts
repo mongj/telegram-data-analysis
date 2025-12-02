@@ -27,7 +27,7 @@ export interface ChatSummary {
     end_hour: number;
     message_count: number;
   } | null;
-  activity_trend: 'increasing' | 'decreasing' | 'stable' | null;
+  activity_trend: "increasing" | "decreasing" | "stable" | null;
 }
 
 export interface SenderData {
@@ -96,6 +96,7 @@ export interface TelegramData {
   reactions: ReactionsSummary;
   timePatterns: TimePatterns;
   timeSeries: TimeSeriesAggregated;
+  topChatsOverTime: TopChatsOverTime;
   loading: boolean;
   error: string | null;
 }
@@ -115,5 +116,12 @@ export interface ChatDataPoint {
   chatId: number;
 }
 
-export type TimeGranularity = 'day' | 'week' | 'month' | 'year';
+export type TimeGranularity = "day" | "week" | "month" | "year";
 
+// Top chats over time (preprocessed top 10 per time segment)
+export interface TopChatsOverTime {
+  by_day: Record<string, Record<string, number>>; // date -> chat_id -> user_messages
+  by_week: Record<string, Record<string, number>>;
+  by_month: Record<string, Record<string, number>>;
+  by_year: Record<string, Record<string, number>>;
+}
